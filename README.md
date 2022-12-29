@@ -26,5 +26,5 @@ $ sudo sh install.sh
 The script simply compiles it using gcc and moves the executable to `/usr/local/bin/`
 ```
 $ gcc aurman.c -lm -lcurl -ljansson -o aurman
-$ mv ./aurman /usr/local/bin/
+$ mv -f ./aurman /usr/local/bin/
 ```
