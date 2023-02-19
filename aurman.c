@@ -9,14 +9,15 @@
 
 
 typedef struct options{
-	char** packages;
-	int packages_size;
+	int status;
+	int help;
 	int search;
 	int info;
 	int source;
 	int install;
 	int remove;
-	int help;
+	int packages_size;
+	char** packages;
 } options;
 
 typedef struct response {
@@ -36,23 +37,24 @@ void sortByPopularity(int array_size, float popularity[], int order[]);
 int main(int argc, char* argv[]) {
 	options parsed_opts = parse_opts(argc, argv);
 
-	int valid = validate_options(parsed_opts);
-	if (valid != 0) {
+	if (parsed_opts.status != 0) {
 		printf("(Type [-h / --help] for options)\n");
 		free(parsed_opts.packages);
-		return valid;
+		return parsed_opts.status;
 	}
-
 
 	if (parsed_opts.help) {
 		printf("Usage: aurman [--options] [...]\n");
 		printf("Options:\n");
-		printf("[-h / --help]\n    Print this message\n");
-		printf("[-S / --search] <package>\n    Search for given package\n");
-		printf("[-I / --info] <package>\n    Get info for given package\n");
-		printf("[-s / --source] <package(s)>\n    Source git files for given package(s)\n");
-		printf("[-i / --install] <package(s)>\n    Build and install given package(s)\n");
-		printf("[-r / --remove] <package(s)>\n    Remove git files for given package(s)\n");
+		printf("[-h / --help]\t\t\tPrint this message\n");
+		printf("[-S / --search] <package>\tSearch for given package\n");
+		printf("[-I / --info] <package>\t\tGet info for given package\n");
+		printf("[-s / --source] <package(s)>\tSource git files for given package(s)\n");
+		printf("[-i / --install] <package(s)>\tBuild and install given package(s)\n");
+		printf("[-r / --remove] <package(s)>\tRemove git files for given package(s)\n");
+		printf("\n");
+		printf("--search, --info, --remove cannot be run alongwith other commands\n");
+		printf("\n");
 
 		return 0;
 	}
@@ -89,7 +91,7 @@ int main(int argc, char* argv[]) {
 		json_decref(root);
 		free(res.data);
 	}
-	if (parsed_opts.info) {
+	else if (parsed_opts.info) {
 		response res = aur_request("info", parsed_opts.packages[0]);
 		json_t* root = json_loads(res.data, 0, NULL);
 
@@ -114,27 +116,29 @@ int main(int argc, char* argv[]) {
 
 		free(res.data);
 	}
-	if (parsed_opts.source) {
-		for (int i = 0; i < parsed_opts.packages_size; i++) {
-			char* source = join(8, (char* []){"[ -d $HOME/.aurman/", parsed_opts.packages[i], " ] && (cd $HOME/.aurman/", parsed_opts.packages[i], " && git pull) || git clone https://aur.archlinux.org/", parsed_opts.packages[i], ".git $HOME/.aurman/", parsed_opts.packages[i]}, "");
-			system(source);
-			free(source);
-		}
-	}
-	if (parsed_opts.install) {
-		for (int i = 0; i < parsed_opts.packages_size; i++) {
-			char* install = join(3, (char* []){"(cd $HOME/.aurman/", parsed_opts.packages[i], "/ && makepkg -si)"}, "");
-			system(install);
-			free(install);
-		}
-	}
-	if (parsed_opts.remove) {
+	else if (parsed_opts.remove) {
 		char* packages = join(parsed_opts.packages_size, parsed_opts.packages, " ");
 		char* remove = join(3, (char* []){"(cd $HOME/.aurman/ && rm -rf ", packages, ")"}, "");
 		system(remove);
 		free(packages);
 		free(remove);
 		printf("Files removed!\nNote: Package must be uninstalled via pacman\n");
+	}
+	else {
+		if (parsed_opts.source) {
+			for (int i = 0; i < parsed_opts.packages_size; i++) {
+				char* source = join(8, (char* []){"[ -d $HOME/.aurman/", parsed_opts.packages[i], " ] && (cd $HOME/.aurman/", parsed_opts.packages[i], " && git pull) || git clone https://aur.archlinux.org/", parsed_opts.packages[i], ".git $HOME/.aurman/", parsed_opts.packages[i]}, "");
+				system(source);
+				free(source);
+			}
+		}
+		if (parsed_opts.install) {
+			for (int i = 0; i < parsed_opts.packages_size; i++) {
+				char* install = join(3, (char* []){"(cd $HOME/.aurman/", parsed_opts.packages[i], "/ && makepkg -si)"}, "");
+				system(install);
+				free(install);
+			}
+		}
 	}
 
 	free(parsed_opts.packages);
@@ -156,20 +160,24 @@ char* join(int arr_size, char* arr[], char* join_val) {
 }
 
 options parse_opts(int argc, char* argv[]) {
-	options parsed_opts = {NULL, 0, 0, 0, 0, 0};
+	options parsed_opts = {0, 0, 0, 0, 0, 0, 0, 0, NULL};
 	static struct option long_options[] = {
+		{"help",	no_argument, NULL, 'h'},
 		{"search",	no_argument, NULL, 'S'},
 		{"info",	no_argument, NULL, 'I'},
 		{"source",	no_argument, NULL, 's'},
 		{"install",	no_argument, NULL, 'i'},
 		{"remove",	no_argument, NULL, 'r'},
-		{"help",	no_argument, NULL, 'h'}
 	};
 
 	int opt;
 	int option_index = 0;
-	while((opt = getopt_long(argc, argv, "SIsirh", long_options, &option_index)) != -1) {
-		if (opt == 'S')
+	int options_count = 0;
+	while((opt = getopt_long(argc, argv, "hSIsir", long_options, &option_index)) != -1) {
+		options_count++;
+		if (opt == 'h')
+			parsed_opts.help = 1;
+		else if (opt == 'S')
 			parsed_opts.search = 1;
 		else if (opt == 'I')
 			parsed_opts.info = 1;
@@ -179,8 +187,6 @@ options parse_opts(int argc, char* argv[]) {
 			parsed_opts.install = 1;
 		else if (opt == 'r')
 			parsed_opts.remove = 1;
-		else if (opt == 'h')
-			parsed_opts.help = 1;
 		else if (opt == '?') {
 			printf("Unknown arg: %c\n", optopt);
 			break;
@@ -189,45 +195,34 @@ options parse_opts(int argc, char* argv[]) {
 
 	parsed_opts.packages_size = argc - optind;
 	parsed_opts.packages = malloc(parsed_opts.packages_size * sizeof(char*));
-	for (int i = 0; optind < argc; i++, optind++)
-		parsed_opts.packages[i] = argv[optind];
-	return parsed_opts;
-}
+	for (int i = optind; i < argc; i++)
+		parsed_opts.packages[i-optind] = argv[i];
 
-int validate_options(options parsed_opts) {
-	if (parsed_opts.help)
-		return 0;
-	if (!(parsed_opts.search || parsed_opts.info || parsed_opts.source || parsed_opts.install || parsed_opts.remove)) {
-		printf("Error: No options selected\n");
-		return 1;
+	if (parsed_opts.help == 1) {}
+	else if (options_count == 0) { 
+		fprintf(stderr, "Error: No options selected\n");
+		parsed_opts.status = 1;
 	}
-	if (parsed_opts.search && (parsed_opts.info || parsed_opts.source || parsed_opts.install || parsed_opts.remove)) {
-		printf("Error: Cannot search and perform other functions in the same command\n");
-		return 2;
+	else if ((parsed_opts.search || parsed_opts.info || parsed_opts.remove) && options_count != 1) {
+		fprintf(stderr, "Error: --search, --info, --remove cannot be run alongwith other commands\n");
+		parsed_opts.status = 2;
 	}
-	if (parsed_opts.info && (parsed_opts.source || parsed_opts.install || parsed_opts.remove)) {
-		printf("Error: Cannot get information and perform other functions in the same command\n");
-		return 2;
+	else if (parsed_opts.packages_size == 0) {
+		fprintf(stderr, "Error: Package(s) not mentioned\n");
+		parsed_opts.status = 3;
 	}
-	if (parsed_opts.remove && (parsed_opts.source || parsed_opts.install)) {
-		printf("Error: Cannot remove source(s) and perform other functions in the same command\n");
-		return 2;
-	}
-	if (parsed_opts.packages_size == 0) {
-		printf("Error: Package(s) not mentioned\n");
-		return 3;
-	}
-	if (parsed_opts.search || parsed_opts.info) {
+	else if (parsed_opts.search || parsed_opts.info) {
 		if (parsed_opts.packages_size > 1) {
-			printf("Error: Search requires 1 package\n");
-			return 3;
+			fprintf(stderr, "Error: --search, --info requires 1 package\n");
+			parsed_opts.status = 3;
 		}
-		if (strlen(parsed_opts.packages[0]) < 3) {
-			printf("Error: Packages to search must have at least 3 characters\n");
-			return 4;
+		else if (strlen(parsed_opts.packages[0]) < 3) {
+			fprintf(stderr, "Error: Package must have at least 3 characters\n");
+			parsed_opts.status = 4;
 		}
 	}
-	return 0;
+
+	return parsed_opts;
 }
 
 size_t process_request(char* response_data, size_t size, size_t nmemb, void* userdata) {
