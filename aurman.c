@@ -26,7 +26,6 @@ typedef struct response {
 } response;
 
 
-char* join(int arr_size, char* arr[], char* join_val);
 options parse_opts(int argc, char* argv[]);
 int validate_options(options parsed_opts);
 size_t process_request(char* response_data, size_t size, size_t nmemb, void* userdata);
@@ -63,9 +62,8 @@ int main(int argc, char* argv[]) {
 		response res = aur_request("search", parsed_opts.packages[0]);
 		json_t* root = json_loads(res.data, 0, NULL);
 
-		const int resultcount = json_integer_value(json_object_get(root, "resultcount"));
-
 		json_t* results = json_object_get(root, "results");
+		const int resultcount = json_integer_value(json_object_get(root, "resultcount"));
 
 		int order[resultcount];
 		float popularity[resultcount];
@@ -114,29 +112,33 @@ int main(int argc, char* argv[]) {
 			printf("Package not found\n");
 		}
 
+		json_decref(root);
 		free(res.data);
 	}
 	else if (parsed_opts.remove) {
-		char* packages = join(parsed_opts.packages_size, parsed_opts.packages, " ");
-		char* remove = join(3, (char* []){"(cd $HOME/.aurman/ && rm -rf ", packages, ")"}, "");
-		system(remove);
-		free(packages);
-		free(remove);
+		for (int i = 0; i < parsed_opts.packages_size; i++) {
+			int cmd_len = 30 + (strlen(parsed_opts.packages[i])*1) + 1;
+			char cmd[cmd_len];
+			snprintf(cmd, cmd_len, "(cd $HOME/.aurman/ && rm -rf %s)", parsed_opts.packages[i]);
+			system(cmd);
+		}
 		printf("Files removed!\nNote: Package must be uninstalled via pacman\n");
 	}
 	else {
 		if (parsed_opts.source) {
 			for (int i = 0; i < parsed_opts.packages_size; i++) {
-				char* source = join(8, (char* []){"[ -d $HOME/.aurman/", parsed_opts.packages[i], " ] && (cd $HOME/.aurman/", parsed_opts.packages[i], " && git pull) || git clone https://aur.archlinux.org/", parsed_opts.packages[i], ".git $HOME/.aurman/", parsed_opts.packages[i]}, "");
-				system(source);
-				free(source);
+				int cmd_len = 115 + (strlen(parsed_opts.packages[i])*4) + 1;
+				char cmd[cmd_len];
+				snprintf(cmd, cmd_len, "[ -d $HOME/.aurman/%s ] && (cd $HOME/.aurman/%s && git pull) || git clone https://aur.archlinux.org/%s.git $HOME/.aurman/%s", parsed_opts.packages[i], parsed_opts.packages[i], parsed_opts.packages[i], parsed_opts.packages[i]);
+				system(cmd);
 			}
 		}
 		if (parsed_opts.install) {
 			for (int i = 0; i < parsed_opts.packages_size; i++) {
-				char* install = join(3, (char* []){"(cd $HOME/.aurman/", parsed_opts.packages[i], "/ && makepkg -si)"}, "");
-				system(install);
-				free(install);
+				int cmd_len = 35 + (strlen(parsed_opts.packages[i])*1) + 1;
+				char cmd[cmd_len];
+				snprintf(cmd, cmd_len, "(cd $HOME/.aurman/%s/ && makepkg -si)", parsed_opts.packages[i]);
+				system(cmd);
 			}
 		}
 	}
@@ -145,19 +147,6 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
-
-char* join(int arr_size, char* arr[], char* join_val) {
-	int str_length = 1 + (sizeof(join_val) * arr_size);
-	for (int i = 0; i < arr_size; i++)
-		str_length += strlen(arr[i]);
-
-	char* str = malloc(sizeof(char) * str_length);
-	strcpy(str, arr[0]);
-	for (int i = 1; i < arr_size; i++)
-		strcat(strcat(str, join_val), arr[i]);
-
-	return str;
-}
 
 options parse_opts(int argc, char* argv[]) {
 	options parsed_opts = {0, 0, 0, 0, 0, 0, 0, 0, NULL};
@@ -245,9 +234,11 @@ response aur_request(char* type, char* package_name) {
 	res.data[0] = '\0';
 	res.size = 0;
 
-	char* url = join(4, (char* []){"https://aur.archlinux.org/rpc/v5/", type, "/", package_name}, "");
+	int url_len = 34 + strlen(type) + strlen(package_name) + 1;
+	char url[url_len];
+	snprintf(url, url_len, "https://aur.archlinux.org/rpc/v5/%s/%s", type, package_name);
+
 	curl_easy_setopt(curl, CURLOPT_URL, url);
-	free(url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, process_request);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&res);
 
