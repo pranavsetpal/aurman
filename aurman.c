@@ -27,7 +27,6 @@ typedef struct response {
 
 
 options parse_opts(int argc, char* argv[]);
-int validate_options(options parsed_opts);
 size_t process_request(char* response_data, size_t size, size_t nmemb, void* userdata);
 response aur_request(char* type, char* package_name);
 void sortByPopularity(int array_size, float popularity[], int order[]);
