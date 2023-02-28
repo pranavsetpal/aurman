@@ -176,7 +176,6 @@ options parse_opts(int argc, char* argv[]) {
 		else if (opt == 'r')
 			parsed_opts.remove = 1;
 		else if (opt == '?') {
-			printf("Unknown arg: %c\n", optopt);
 			break;
 		}
 	}
@@ -189,6 +188,9 @@ options parse_opts(int argc, char* argv[]) {
 	if (parsed_opts.help == 1) {}
 	else if (options_count == 0) { 
 		fprintf(stderr, "Error: No options selected\n");
+		parsed_opts.status = 1;
+	}
+	else if (opt == '?') {
 		parsed_opts.status = 1;
 	}
 	else if ((parsed_opts.search || parsed_opts.info || parsed_opts.remove) && options_count != 1) {
