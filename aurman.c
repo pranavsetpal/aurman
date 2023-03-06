@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 	options parsed_opts = parse_opts(argc, argv);
 
 	if (parsed_opts.status != 0) {
-		printf("(Type [-h / --help] for options)\n");
+		printf("(Type 'aurman [-h / --help]' for options)\n");
 		free(parsed_opts.packages);
 		return parsed_opts.status;
 	}
@@ -44,12 +44,12 @@ int main(int argc, char* argv[]) {
 	if (parsed_opts.help) {
 		printf("Usage: aurman [--options] [...]\n");
 		printf("Options:\n");
-		printf("[-h / --help]\t\t\tPrint this message\n");
-		printf("[-S / --search] <package>\tSearch for given package\n");
-		printf("[-I / --info] <package>\t\tGet info for given package\n");
-		printf("[-s / --source] <package(s)>\tSource git files for given package(s)\n");
-		printf("[-i / --install] <package(s)>\tBuild and install given package(s)\n");
-		printf("[-r / --remove] <package(s)>\tRemove git files for given package(s)\n");
+		printf("    aurman [-h / --help]                    Print this message\n");
+		printf("    aurman [-S / --search] <package>        Search for given package\n");
+		printf("    aurman [-I / --info] <package>          Get info for given package\n");
+		printf("    aurman [-s / --source] <package(s)>     Source git files for given package(s)\n");
+		printf("    aurman [-i / --install] <package(s)>    Build and install given package(s)\n");
+		printf("    aurman [-r / --remove] <package(s)>     Remove git files for given package(s)\n");
 		printf("\n");
 		printf("--search, --info, --remove cannot be run alongwith other commands\n");
 		printf("\n");
