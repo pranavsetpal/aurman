@@ -16,6 +16,7 @@ typedef struct options{
 	int source;
 	int install;
 	int remove;
+	int all;
 	int packages_size;
 	char** packages;
 } options;
@@ -50,8 +51,12 @@ int main(int argc, char* argv[]) {
 		printf("    aurman [-s / --source] <package(s)>     Source git files for given package(s)\n");
 		printf("    aurman [-i / --install] <package(s)>    Build and install given package(s)\n");
 		printf("    aurman [-r / --remove] <package(s)>     Remove git files for given package(s)\n");
+		printf("    aurman [-a / --all]                     Selects all packages present in ~/.aurman folder\n");
 		printf("\n");
 		printf("--search, --info, --remove cannot be run alongwith other commands\n");
+		printf("--all can be used with --source, --install, --remove\n");
+		printf("\n");
+		printf("Note: Using --remove prior to uninstalling package may break --all functionality\n");
 		printf("\n");
 
 		return 0;
@@ -114,41 +119,80 @@ int main(int argc, char* argv[]) {
 		json_decref(root);
 		free(res.data);
 	}
-	else if (parsed_opts.remove) {
-		for (int i = 0; i < parsed_opts.packages_size; i++) {
-			int cmd_len = 30 + (strlen(parsed_opts.packages[i])*1) + 1;
-			char cmd[cmd_len];
-			snprintf(cmd, cmd_len, "(cd $HOME/.aurman/ && rm -rf %s)", parsed_opts.packages[i]);
-			system(cmd);
-		}
-		printf("Files removed!\nNote: Package must be uninstalled via pacman\n");
-	}
 	else {
-		if (parsed_opts.source) {
+		if (parsed_opts.all) {
+			FILE* cmd = popen("ls $HOME/.aurman/", "r");
+
+			int pkgs_avail = 8;
+			int pkgs_used = 0;
+			parsed_opts.packages = realloc(parsed_opts.packages, pkgs_avail * sizeof(char*));
+
+			int str_avail = 16;
+			int str_used = 0;
+			char* str;
+
+			char c = '\0';
+			while(fread(&c, sizeof(char), 1, cmd) == sizeof(char)) {
+				if (c == '\n') {
+					str[str_used] = '\0';
+					if (pkgs_used == pkgs_avail)
+						parsed_opts.packages = realloc(parsed_opts.packages, (pkgs_avail *= 2) * sizeof(char*));
+					parsed_opts.packages[pkgs_used] = str;
+					pkgs_used++;
+					str_used = 0;
+				}
+				else {
+					if (str_used == 0)
+						str = malloc(str_avail * sizeof(char));
+					else if (str_used == str_avail)
+						str = realloc(str, (str_avail *= 2) * sizeof(char));
+					str[str_used] = c;
+					str_used++;
+				}
+			}
+			parsed_opts.packages_size = pkgs_used;
+
+			pclose(cmd);
+		}
+		if (parsed_opts.remove) {
 			for (int i = 0; i < parsed_opts.packages_size; i++) {
-				int cmd_len = 115 + (strlen(parsed_opts.packages[i])*4) + 1;
+				int cmd_len = 30 + (strlen(parsed_opts.packages[i])*1) + 1;
 				char cmd[cmd_len];
-				snprintf(cmd, cmd_len, "[ -d $HOME/.aurman/%s ] && (cd $HOME/.aurman/%s && git pull) || git clone https://aur.archlinux.org/%s.git $HOME/.aurman/%s", parsed_opts.packages[i], parsed_opts.packages[i], parsed_opts.packages[i], parsed_opts.packages[i]);
+				snprintf(cmd, cmd_len, "(cd $HOME/.aurman/ && rm -rf %s)", parsed_opts.packages[i]);
 				system(cmd);
 			}
+			printf("Files removed!\nNote: Package must be uninstalled via pacman\n");
 		}
-		if (parsed_opts.install) {
-			for (int i = 0; i < parsed_opts.packages_size; i++) {
-				int cmd_len = 35 + (strlen(parsed_opts.packages[i])*1) + 1;
-				char cmd[cmd_len];
-				snprintf(cmd, cmd_len, "(cd $HOME/.aurman/%s/ && makepkg -si)", parsed_opts.packages[i]);
-				system(cmd);
+		else {
+			if (parsed_opts.source) {
+				for (int i = 0; i < parsed_opts.packages_size; i++) {
+					int cmd_len = 115 + (strlen(parsed_opts.packages[i])*4) + 1;
+					char cmd[cmd_len];
+					snprintf(cmd, cmd_len, "[ -d $HOME/.aurman/%s ] && (cd $HOME/.aurman/%s && git pull) || git clone https://aur.archlinux.org/%s.git $HOME/.aurman/%s", parsed_opts.packages[i], parsed_opts.packages[i], parsed_opts.packages[i], parsed_opts.packages[i]);
+					system(cmd);
+				}
+			}
+			if (parsed_opts.install) {
+				for (int i = 0; i < parsed_opts.packages_size; i++) {
+					int cmd_len = 35 + (strlen(parsed_opts.packages[i])*1) + 1;
+					char cmd[cmd_len];
+					snprintf(cmd, cmd_len, "(cd $HOME/.aurman/%s/ && makepkg -si)", parsed_opts.packages[i]);
+					system(cmd);
+				}
 			}
 		}
 	}
 
+	if (parsed_opts.all)
+		for (int i = 0; i < parsed_opts.packages_size; i++)
+			free(parsed_opts.packages[i]);
 	free(parsed_opts.packages);
 	return 0;
 }
 
 
 options parse_opts(int argc, char* argv[]) {
-	options parsed_opts = {0, 0, 0, 0, 0, 0, 0, 0, NULL};
+	options parsed_opts = {0, 0, 0, 0, 0, 0, 0, 0, 0, NULL};
 	static struct option long_options[] = {
 		{"help",	no_argument, NULL, 'h'},
 		{"search",	no_argument, NULL, 'S'},
@@ -156,12 +200,13 @@ options parse_opts(int argc, char* argv[]) {
 		{"source",	no_argument, NULL, 's'},
 		{"install",	no_argument, NULL, 'i'},
 		{"remove",	no_argument, NULL, 'r'},
+		{"all",		no_argument, NULL, 'a'},
 	};
 
 	int opt;
 	int option_index = 0;
 	int options_count = 0;
-	while((opt = getopt_long(argc, argv, "hSIsir", long_options, &option_index)) != -1) {
+	while((opt = getopt_long(argc, argv, "hSIsira", long_options, &option_index)) != -1) {
 		options_count++;
 		if (opt == 'h')
 			parsed_opts.help = 1;
@@ -175,9 +220,10 @@ options parse_opts(int argc, char* argv[]) {
 			parsed_opts.install = 1;
 		else if (opt == 'r')
 			parsed_opts.remove = 1;
-		else if (opt == '?') {
+		else if (opt == 'a')
+			parsed_opts.all = 1;
+		else if (opt == '?')
 			break;
-		}
 	}
 
 	parsed_opts.packages_size = argc - optind;
@@ -190,14 +236,13 @@ options parse_opts(int argc, char* argv[]) {
 		fprintf(stderr, "Error: No options selected\n");
 		parsed_opts.status = 1;
 	}
-	else if (opt == '?') {
+	else if (opt == '?')
 		parsed_opts.status = 1;
-	}
 	else if ((parsed_opts.search || parsed_opts.info || parsed_opts.remove) && options_count != 1) {
 		fprintf(stderr, "Error: --search, --info, --remove cannot be run alongwith other commands\n");
 		parsed_opts.status = 2;
 	}
-	else if (parsed_opts.packages_size == 0) {
+	else if (parsed_opts.all != 1 && parsed_opts.packages_size == 0) {
 		fprintf(stderr, "Error: Package(s) not mentioned\n");
 		parsed_opts.status = 3;
 	}
@@ -208,7 +253,7 @@ options parse_opts(int argc, char* argv[]) {
 		}
 		else if (strlen(parsed_opts.packages[0]) < 3) {
 			fprintf(stderr, "Error: Package must have at least 3 characters\n");
-			parsed_opts.status = 4;
+			parsed_opts.status = 3;
 		}
 	}
 
