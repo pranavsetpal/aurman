@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
 			const float popularity = json_number_value(json_object_get(result, "Popularity"));
 			const int numvotes = json_integer_value(json_object_get(result, "NumVotes"));
 
-			printf("Maintainer\t: %s\nName\t\t: %s\nVersion\t: %s\nDescription\t: %s\nURL\t\t: %s\nPopularity\t: %f\nVotes\t\t: %d\n", maintainer, name, version, description, url, popularity, numvotes);
+			printf("Maintainer\t: %s\nName\t\t: %s\nVersion\t\t: %s\nDescription\t: %s\nURL\t\t: %s\nPopularity\t: %f\nVotes\t\t: %d\n", maintainer, name, version, description, url, popularity, numvotes);
 		} 
 		else {
 			printf("Package not found\n");
